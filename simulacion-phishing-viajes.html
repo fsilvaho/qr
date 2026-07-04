@@ -268,6 +268,16 @@
     outline:2px solid var(--gold);
     outline-offset:2px;
   }
+  .field input.error{
+    border-color:#E8896B;
+    background:rgba(232,137,107,0.1);
+  }
+  .field .error-msg{
+    font-size:11.5px;
+    color:#E8896B;
+    display:none;
+  }
+  .field.has-error .error-msg{display:block;}
 
   .submit-btn{
     margin-top:8px;
@@ -435,6 +445,8 @@
 </head>
 <body>
 
+<div class="disclaimer">Simulación educativa · Ningún dato se envía, guarda ni comparte · No es un sitio real de viajes</div>
+
 <div class="stage">
 
   <header class="brand">
@@ -487,24 +499,28 @@
     <form class="stub" id="phishForm">
       <div class="stub-label">Datos del pasajero</div>
 
-      <div class="field">
+      <div class="field" id="field-nombre">
         <label for="nombre">Nombre completo</label>
         <input id="nombre" type="text" placeholder="Como figura en tu DNI" autocomplete="off">
+        <span class="error-msg">Escribe tu nombre y apellido (mínimo 2 palabras).</span>
       </div>
 
-      <div class="field">
+      <div class="field" id="field-dni">
         <label for="dni">DNI</label>
-        <input id="dni" type="text" placeholder="00000000" autocomplete="off">
+        <input id="dni" type="text" placeholder="00000000" autocomplete="off" inputmode="numeric" maxlength="8">
+        <span class="error-msg">El DNI debe tener 8 dígitos.</span>
       </div>
 
-      <div class="field">
+      <div class="field" id="field-tarjeta">
         <label for="tarjeta">Número de tarjeta (para confirmar el cupo)</label>
-        <input id="tarjeta" type="text" placeholder="•••• •••• •••• ••••" autocomplete="off">
+        <input id="tarjeta" type="text" placeholder="•••• •••• •••• ••••" autocomplete="off" inputmode="numeric" maxlength="19">
+        <span class="error-msg">Ingresa los 16 dígitos de la tarjeta.</span>
       </div>
 
-      <div class="field">
+      <div class="field" id="field-cvv">
         <label for="cvv">CVV</label>
-        <input id="cvv" type="text" placeholder="•••" autocomplete="off">
+        <input id="cvv" type="text" placeholder="•••" autocomplete="off" inputmode="numeric" maxlength="4">
+        <span class="error-msg">El CVV debe tener 3 o 4 dígitos.</span>
       </div>
 
       <button type="submit" class="submit-btn">Confirmar reserva</button>
@@ -517,7 +533,7 @@
 
   <div class="reveal" id="reveal">
     <div class="stamp-zone">
-      <div class="stamp">Has caído en un quishing</div>
+      <div class="stamp">Has caído en un phishing</div>
       <div class="stamp-sub">
         Esta página imitaba a una agencia de viajes para que ingreses tu <b>DNI y los datos de tu tarjeta</b>.
         En un ataque real, esa información habría sido enviada a un tercero. Aquí, no se envió ni se guardó nada:
@@ -600,10 +616,70 @@
   const reveal = document.getElementById('reveal');
   const retryBtn = document.getElementById('retryBtn');
 
+  const nombreInput = document.getElementById('nombre');
+  const dniInput = document.getElementById('dni');
+  const tarjetaInput = document.getElementById('tarjeta');
+  const cvvInput = document.getElementById('cvv');
+
+  // Formateo visual mientras se escribe (solo dígitos, agrupado en tarjeta)
+  const soloDigitos = (v) => v.replace(/\D/g, '');
+  dniInput.addEventListener('input', () => {
+    dniInput.value = soloDigitos(dniInput.value).slice(0, 8);
+  });
+  cvvInput.addEventListener('input', () => {
+    cvvInput.value = soloDigitos(cvvInput.value).slice(0, 4);
+  });
+  tarjetaInput.addEventListener('input', () => {
+    const digits = soloDigitos(tarjetaInput.value).slice(0, 16);
+    tarjetaInput.value = digits.replace(/(.{4})/g, '$1 ').trim();
+  });
+
+  function marcarError(fieldId, esValido){
+    const field = document.getElementById(fieldId);
+    const input = field.querySelector('input');
+    field.classList.toggle('has-error', !esValido);
+    input.classList.toggle('error', !esValido);
+    return esValido;
+  }
+
+  function validarFormulario(){
+    const nombreOk = nombreInput.value.trim().split(/\s+/).filter(Boolean).length >= 2;
+    const dniOk = soloDigitos(dniInput.value).length === 8;
+    const tarjetaOk = soloDigitos(tarjetaInput.value).length === 16;
+    const cvvOk = /^\d{3,4}$/.test(cvvInput.value);
+
+    const nombreValido = marcarError('field-nombre', nombreOk);
+    const dniValido = marcarError('field-dni', dniOk);
+    const tarjetaValida = marcarError('field-tarjeta', tarjetaOk);
+    const cvvValido = marcarError('field-cvv', cvvOk);
+
+    return nombreValido && dniValido && tarjetaValida && cvvValido;
+  }
+
+  // Quita el estado de error apenas la persona corrige el campo
+  [nombreInput, dniInput, tarjetaInput, cvvInput].forEach((input) => {
+    input.addEventListener('input', () => {
+      const field = input.closest('.field');
+      if (field.classList.contains('has-error')) validarFormulario();
+    });
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    // No se lee, guarda ni envía ningún valor introducido.
+
+    if (!validarFormulario()){
+      const primerError = form.querySelector('.has-error input');
+      if (primerError) primerError.focus();
+      return;
+    }
+
+    // No se lee, guarda ni envía ningún valor introducido: solo se limpia.
     form.reset();
+    ['field-nombre','field-dni','field-tarjeta','field-cvv'].forEach(id => {
+      document.getElementById(id).classList.remove('has-error');
+      document.getElementById(id).querySelector('input').classList.remove('error');
+    });
+
     ticketWrap.classList.add('hidden');
     reveal.classList.add('active');
     reveal.scrollIntoView({behavior:'smooth', block:'start'});
